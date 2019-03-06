@@ -1,0 +1,243 @@
+<html>
+<head>
+
+<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
+<script src="https://unpkg.com/jquery-csv"></script>
+<script src="https://d3js.org/d3.v4.js"></script>
+<script src="https://d3js.org/topojson.v2.min.js"></script>
+<script src="https://d3js.org/d3-color.v1.min.js"></script>
+<script src="https://d3js.org/d3-interpolate.v1.min.js"></script>
+<script src="https://d3js.org/d3-scale-chromatic.v1.min.js"></script>
+<script src="https://d3js.org/d3-scale.v2.min.js"></script>
+<style>
+
+path {
+  stroke: #fff;
+  }
+path:hover {
+  fill:yellow;
+  cursor:pointer;
+}
+body {
+  font-family: "proxima-nova", "Source Sans Pro", sans-serif;
+}
+h2#amt, h3#amt_per {
+  margin: 0.2em;
+}
+h2#amt{
+  font-size:2.5rem;
+  background: black;
+  color:white;
+}
+h3#amt_per{
+  font-size:2rem;
+}
+p {
+  font-size: 16px;
+  margin: 15px 0 10px 0;
+}
+svg {
+  background-color: white;
+  padding-left: 20px;
+}
+#tooltip {
+  width: 260px;
+  text-align:center;
+  height: auto;
+  padding: 5px;
+  background-color: #fff;
+  color: #000;
+  -webkit-border-radius: 5px;
+  -moz-border-radius: 5px;
+  border-radius: 5px;
+  -webkit-box-shadow: 3px 3px 8px rgba(0, 0, 0, 0.4);
+  -moz-box-shadow: 3px 3px 8px rgba(0, 0, 0, 0.4);
+  box-shadow: 3px 3px 8px rgba(0, 0, 0, 0.4);
+  pointer-events: none;
+  position: absolute;
+}
+#tooltip > h3.header   {
+  background-color: grey;
+  margin: 0em;
+  padding: 0.5em 0em;
+  color: white;
+}
+#tooltip p {
+  margin: 0;
+  margin-top: 0.2em;
+  font-size: 1em;
+  line-height: 18px;
+}
+#tooltip p#nyc_disclaimer{
+  font-size: .7em;
+  margin-top: -20px;
+}
+.hidden{
+  display:none !important;
+}
+.entry-content > p:first-of-type {
+  text-align:center;
+  margin-top: -40px;
+}
+</style>
+</head>
+
+<body>
+
+<svg width="700" height="500" stroke="#000" stroke-linejoin="round" stroke-linecap="round">
+  <defs>
+    <filter id="blur">
+      <feGaussianBlur stdDeviation="5"></feGaussianBlur>
+    </filter>
+  </defs>
+</svg>
+
+<div id="tooltip" class="hidden">
+  <h3 class="header"><span id="county">County Name</span> County</h3>
+  <p id="nyc_disclaimer" class="hidden">(part of NY school district)</p>
+  <p id="owed-wrapper" class="hidden">is owed</p>
+  <h3 id="amt_per">$$</h3>
+  <h2 id="amt">$$</h2>
+</div>
+
+<script>
+  var fa_owed_url = "https://gist.githubusercontent.com/vgulati/5eccdf548eb482540556ba528320ba03/raw/35123f54287a75af8435caeec370ae6f20aecdb9/ny_fa_owed.csv";
+  var nys_url = "https://gist.githubusercontent.com/vgulati/6471512764f745c8157263e7eea4dda1/raw/db10005eb58f9d878cad267ab6a2773b79397263/new_york_counties.json";
+
+  var csv_data;
+  var fa_data = {};
+  var all_per_pupil_dollars = [0];
+  $.ajax({
+    url: fa_owed_url,
+    async: false,
+    success: function (csvd) {
+      csv_data = $.csv.toArrays(csvd);
+    },
+    dataType: "text",
+    complete: function () {
+      $.each(csv_data, function(index,arr){ 
+        if(index==0){ return; };
+        if(arr[1].length > 0){
+          var key = arr[0].replace(/"/g,'').trim().toUpperCase();
+          var h = {amount: parseInt(arr[1]),
+            amount_dollar: arr[2],
+            per_pupil: parseFloat(arr[3]),
+            per_pupil_dollar: arr[4]
+          }
+          all_per_pupil_dollars.push(h.per_pupil);
+          fa_data[key]=h;
+        }
+      })
+    }
+  });
+  
+  var w = 700;
+  var h = 500;
+  var projection = d3.geoTransverseMercator()
+          .translate([ 280, 540 ])
+          .rotate([76 + 35 / 60, - 40]).scale([ w*8.6 ]);
+  var svg = d3.select("svg");
+  var path = d3.geoPath().projection(projection);
+  
+  
+  color = d3.scaleSequentialQuantile(all_per_pupil_dollars, t => d3.interpolateReds(t))
+
+  pull_name = function(d){
+    var name = d.properties.NAME.toUpperCase();
+    if(name == "BRONX" || name == "QUEENS" || name=="KINGS" || name =="RICHMOND"){
+      name="NEW YORK";
+    }
+    return name;
+  }
+
+  fetch = function(d, field){
+    var name = pull_name(d);
+    if(fa_data[name] != null){ 
+      return fa_data[name][field];
+    }
+    else{
+      return null;
+    }
+  }
+
+  d3.json(nys_url, function(nys) {
+    var topoFeatures = topojson.feature(nys, nys.objects.cb_2015_new_york_county_20m).features;
+
+    svg.append("g")
+      .attr("class", "counties")
+      .selectAll("path")
+      .data(topoFeatures)
+      .enter().append("path")
+      .attr("fill", d => color(fetch(d, "per_pupil")))
+      .attr("d", path)
+      .on("mouseover", function(d){
+            var loc = $(this).position();
+            var county_name = d.properties.NAME;
+            var owed = fetch(d, "amount_dollar");
+            
+            d3.select("#tooltip")
+            .style("top", loc.top-400 + "px")
+            .style("left", loc.left-90 + "px")
+            .classed("hidden", false);
+
+            $("#county").html(county_name);
+            $("#amt").html(owed+ " total");
+            $("#amt_per").html(fetch(d, "per_pupil_dollar")+ " per student");
+
+            if(pull_name(d) == "NEW YORK"){
+              d3.select("#nyc_disclaimer").classed("hidden",false);
+            }
+
+            if (owed == null){
+              d3.select("#owed-wrapper").classed("hidden", true);
+              d3.select("#amt").classed("hidden", true);
+              d3.select("#amt_per").classed("hidden", true);
+            };
+        })
+        .on("mouseout", function(){
+          d3.select("#tooltip").classed("hidden", true);
+          d3.select("#owed-wrapper").classed("hidden", false);
+          d3.select("#amt").classed("hidden", false);
+          d3.select("#amt_per").classed("hidden", false);
+          d3.select("#nyc_disclaimer").classed("hidden",true);
+        });
+  });
+
+  // Legend
+  var legend_labels = ["< $500", "$1,100+", "$1,400+", "$1,650+", "> $2,850"];
+  var ext_color_domain = [400, 1100, 1400, 1650, 2800];
+  var height = 500;
+
+  var legend = svg.selectAll("g.legend")
+  .data(ext_color_domain)
+  .enter().append("g")
+  .attr("class", "legend");
+
+  var ls_w = 20, ls_h = 17;
+
+  legend.append("rect")
+  .attr("x", 20)
+  .attr("y", function(d, i){ return height - (i*ls_h) - 2*ls_h;})
+  .attr("width", ls_w)
+  .attr("height", ls_h)
+  .style("fill", function(d, i) { return color(d); })
+  .style("opacity", 0.8);
+
+  legend.append("text")
+  .attr("x", 50)
+  .attr("y", function(d, i){ return height - (i*ls_h) - ls_h - 4;})
+  .attr("font-weight", "lighter")
+  .attr("font-size","0.85em")
+  .text(function(d, i){ return legend_labels[i]; });
+
+  legend.append("text")
+  .attr("class", "caption")
+  .attr("x", 20)
+  .attr("y", 393)
+  .attr("fill", "#000")
+  .attr("text-anchor", "start")
+  .text("$$ owed per pupil");
+</script>
+
+</body>
+</html>
