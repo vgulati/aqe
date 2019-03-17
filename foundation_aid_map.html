@@ -68,10 +68,10 @@ svg {
   font-size: 1em;
   line-height: 18px;
 }
-#tooltip p#nyc_disclaimer{
+/*#tooltip p#nyc_disclaimer{
   font-size: .7em;
   margin-top: -20px;
-}
+}*/
 .hidden{
   display:none !important;
 }
@@ -93,15 +93,15 @@ svg {
 </svg>
 
 <div id="tooltip" class="hidden">
-  <h3 class="header"><span id="county">County Name</span> County</h3>
-  <p id="nyc_disclaimer" class="hidden">(part of NY school district)</p>
+  <h3 class="header"><span id="county">County Name</span></h3>
+  <!-- <p id="nyc_disclaimer" class="hidden">(part of NY school district)</p> -->
   <p id="owed-wrapper" class="hidden">is owed</p>
   <h3 id="amt_per">$$</h3>
   <h2 id="amt">$$</h2>
 </div>
 
 <script>
-  var fa_owed_url = "https://gist.githubusercontent.com/vgulati/5eccdf548eb482540556ba528320ba03/raw/35123f54287a75af8435caeec370ae6f20aecdb9/ny_fa_owed.csv";
+  var fa_owed_url = "https://gist.github.com/vgulati/5eccdf548eb482540556ba528320ba03/raw/c1b98411d37ddfb6f1e064211ededd6add441748/ny_fa_owed.csv";
   var nys_url = "https://gist.githubusercontent.com/vgulati/6471512764f745c8157263e7eea4dda1/raw/db10005eb58f9d878cad267ab6a2773b79397263/new_york_counties.json";
 
   var csv_data;
@@ -180,12 +180,19 @@ svg {
             .style("left", loc.left-90 + "px")
             .classed("hidden", false);
 
-            $("#county").html(county_name);
+            
             $("#amt").html(owed+ " total");
             $("#amt_per").html(fetch(d, "per_pupil_dollar")+ " per student");
 
             if(pull_name(d) == "NEW YORK"){
-              d3.select("#nyc_disclaimer").classed("hidden",false);
+              $("#county").html(county_name+" County*");
+            }
+            else if(owed == null){
+              $("#county").html(county_name+" County^");
+            }
+            else{
+              $("#county").html(county_name+" County");
+              //d3.select("#nyc_disclaimer").classed("hidden",false);
             }
 
             if (owed == null){
@@ -199,7 +206,7 @@ svg {
           d3.select("#owed-wrapper").classed("hidden", false);
           d3.select("#amt").classed("hidden", false);
           d3.select("#amt_per").classed("hidden", false);
-          d3.select("#nyc_disclaimer").classed("hidden",true);
+          // d3.select("#nyc_disclaimer").classed("hidden",true);
         });
   });
 
